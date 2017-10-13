@@ -12,7 +12,12 @@
 import { Realm } from "../realm.js";
 import { FunctionValue } from "../values/index.js";
 import * as t from "babel-types";
-import type { BabelNodeExpression, BabelNodeCallExpression, BabelNodeFunctionExpression } from "babel-types";
+import type {
+  BabelNodeExpression,
+  BabelNodeCallExpression,
+  BabelNodeFunctionExpression,
+  BabelNodeFunctionDeclaration,
+} from "babel-types";
 import type { BabelTraversePath } from "babel-traverse";
 import type { FunctionBodyAstNode } from "../types.js";
 import type { TryQuery, FunctionInfo, FactoryFunctionInfo, ResidualFunctionBinding } from "./types.js";
@@ -136,7 +141,7 @@ export let ClosureRefReplacer = {
     }
   },
 
-  // TODO: handle FunctionDeclaration
+  // Replace "function () {}" ==> "factory_id.bind(null)".
   FunctionExpression(path: BabelTraversePath, state: ClosureRefReplacerState) {
     if (t.isProgram(path.parentPath.parentPath.node)) {
       // Our goal is replacing duplicate nested function so skip root residual function itself.
@@ -150,7 +155,35 @@ export let ClosureRefReplacer = {
       // Un-interpreted nested function.
       return;
     }
-    replaceNestedFunction(functionTag, path, state);
+    const duplicateFunctionInfo = state.factoryFunctionInfos.get(functionTag);
+    if (duplicateFunctionInfo && canShareFunctionBody(duplicateFunctionInfo)) {
+      const { factoryId } = duplicateFunctionInfo;
+      path.replaceWith(t.callExpression(t.memberExpression(factoryId, t.identifier("bind")), [nullExpression]));
+    }
+  },
+
+  // Replace "function foo() {}" ==> "var foo = factory_id.bind(null)".
+  FunctionDeclaration(path: BabelTraversePath, state: ClosureRefReplacerState) {
+    // BabelTraversePath is missing flow typing for "parentPath" property so cast to any.
+    if (t.isProgram((path: any).parentPath.parentPath.node)) {
+      // Our goal is replacing duplicate nested function so skip root residual function itself.
+      // This assumes the root function is wrapped with: t.file(t.program([t.expressionStatement(rootFunction).
+      return;
+    }
+
+    const functionDeclaration: BabelNodeFunctionDeclaration = path.node;
+    const functionTag = ((functionDeclaration.body: any): FunctionBodyAstNode).uniqueTag;
+    if (!functionTag) {
+      // Un-interpreted nested function.
+      return;
+    }
+    const duplicateFunctionInfo = state.factoryFunctionInfos.get(functionTag);
+    if (duplicateFunctionInfo && canShareFunctionBody(duplicateFunctionInfo)) {
+      const { factoryId } = duplicateFunctionInfo;
+      const initExpression = t.callExpression(t.memberExpression(factoryId, t.identifier("bind")), [nullExpression]);
+      const replaceNode = t.variableDeclaration("var", [t.variableDeclarator(functionDeclaration.id, initExpression)]);
+      path.replaceWith(replaceNode);
+    }
   },
 
   // A few very simple dead code elimination helpers. Eventually these should be subsumed by the partial evaluators.
