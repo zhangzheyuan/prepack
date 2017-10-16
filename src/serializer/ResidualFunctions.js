@@ -147,12 +147,12 @@ export class ResidualFunctions {
     const factoryFunctionInfos = new Map();
     for (const [functionBody, instances] of this.functions) {
       invariant(instances.length > 0);
-      // Rewritten function should never use factory function.
-      invariant(!this._hasRewrittenFunctionInstance(rewrittenAdditionalFunctions, instances));
 
       let factoryId;
       const suffix = instances[0].functionValue.__originalName || "";
       if (this._shouldUseFactoryFunction(functionBody, instances)) {
+        // Rewritten function should never use factory function.
+        invariant(!this._hasRewrittenFunctionInstance(rewrittenAdditionalFunctions, instances));
         factoryId = t.identifier(this.factoryNameGenerator.generate(suffix));
       } else {
         // For inline function body case, use the first function as the factory function.

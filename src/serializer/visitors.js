@@ -93,15 +93,6 @@ function canShareFunctionBody(duplicateFunctionInfo: FactoryFunctionInfo): boole
   return unbound.size === 0 && modified.size === 0 && !usesThis;
 }
 
-// TODO: enhance for nested functions accessing read-only free variables.
-function replaceNestedFunction(functionTag: number, path: BabelTraversePath, state: ClosureRefReplacerState) {
-  const duplicateFunctionInfo = state.factoryFunctionInfos.get(functionTag);
-  if (duplicateFunctionInfo && canShareFunctionBody(duplicateFunctionInfo)) {
-    const { factoryId } = duplicateFunctionInfo;
-    path.replaceWith(t.callExpression(t.memberExpression(factoryId, t.identifier("bind")), [nullExpression]));
-  }
-}
-
 export let ClosureRefReplacer = {
   ReferencedIdentifier(path: BabelTraversePath, state: ClosureRefReplacerState) {
     if (ignorePath(path)) return;
@@ -164,8 +155,7 @@ export let ClosureRefReplacer = {
 
   // Replace "function foo() {}" ==> "var foo = factory_id.bind(null)".
   FunctionDeclaration(path: BabelTraversePath, state: ClosureRefReplacerState) {
-    // BabelTraversePath is missing flow typing for "parentPath" property so cast to any.
-    if (t.isProgram((path: any).parentPath.parentPath.node)) {
+    if (t.isProgram(path.parentPath.parentPath.node)) {
       // Our goal is replacing duplicate nested function so skip root residual function itself.
       // This assumes the root function is wrapped with: t.file(t.program([t.expressionStatement(rootFunction).
       return;
