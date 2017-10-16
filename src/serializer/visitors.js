@@ -138,8 +138,7 @@ export let ClosureRefReplacer = {
 
   // TODO: handle FunctionDeclaration
   FunctionExpression(path: BabelTraversePath, state: ClosureRefReplacerState) {
-    // BabelTraversePath is missing flow typing for "parentPath" property so cast to any.
-    if (t.isProgram((path: any).parentPath.parentPath.node)) {
+    if (t.isProgram(path.parentPath.parentPath.node)) {
       // Our goal is replacing duplicate nested function so skip root residual function itself.
       // This assumes the root function is wrapped with: t.file(t.program([t.expressionStatement(rootFunction).
       return;
